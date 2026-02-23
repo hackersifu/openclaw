@@ -2,7 +2,6 @@ declare const Buffer: any;
 
 import { lookup } from "node:dns/promises";
 import { isPrivateIpAddress } from "openclaw/plugin-sdk";
-import type { MSTeamsAttachmentLike } from "./types.js";
 import { getMSTeamsRuntime } from "../runtime.js";
 import { downloadAndStoreMSTeamsRemoteMedia } from "./remote-media.js";
 import {
