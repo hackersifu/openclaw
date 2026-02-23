@@ -1,5 +1,7 @@
 declare const Buffer: any;
 
+import { lookup } from "node:dns/promises";
+import { isPrivateIpAddress } from "openclaw/plugin-sdk";
 import type { MSTeamsAttachmentLike } from "./types.js";
 
 type InlineImageCandidate =
