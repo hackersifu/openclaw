@@ -13,15 +13,8 @@ function safeTrim(value: unknown): string | undefined {
 export function buildInboundMetaSystemPrompt(ctx: TemplateContext): string {
   const chatType = normalizeChatType(ctx.ChatType);
   const isDirect = !chatType || chatType === "direct";
-  const isNewSession = ctx.IsNewSession === "true";
-  const originatingChannel = safeTrim(ctx.OriginatingChannel);
-  const surface = safeTrim(ctx.Surface);
-  const provider = safeTrim(ctx.Provider);
-  const isDiscord =
-    provider === "discord" || surface === "discord" || originatingChannel === "discord";
 
-  // Keep system metadata strictly free of attacker-controlled strings (sender names, group subjects, etc.)
-  // unless explicitly opted into for new-session context (e.g. Discord channel topics).
+  // Keep system metadata strictly free of attacker-controlled strings (sender names, group subjects, etc.).
   // Those belong in the user-role "untrusted context" blocks.
   // Per-message identifiers (message_id, reply_to_id, sender_id) are also excluded here: they change
   // on every turn and would bust prefix-based prompt caches on local model providers. They are
@@ -30,27 +23,25 @@ export function buildInboundMetaSystemPrompt(ctx: TemplateContext): string {
   // Resolve channel identity: prefer explicit channel, then surface, then provider.
   // For webchat/Hub Chat sessions (when Surface is 'webchat' or undefined with no real channel),
   // omit the channel field entirely rather than falling back to an unrelated provider.
-  let channelValue = originatingChannel ?? surface;
+  let channelValue = safeTrim(ctx.OriginatingChannel) ?? safeTrim(ctx.Surface);
   if (!channelValue) {
     // Only fall back to Provider if it represents a real messaging channel.
     // For webchat/internal sessions, ctx.Provider may be unrelated (e.g., the user's configured
     // default channel), so skip it to avoid incorrect runtime labels like "channel=whatsapp".
+    const provider = safeTrim(ctx.Provider);
     // Check if provider is "webchat" or if we're in an internal/webchat context
-    if (provider !== "webchat" && surface !== "webchat") {
+    if (provider !== "webchat" && ctx.Surface !== "webchat") {
       channelValue = provider;
     }
     // Otherwise leave channelValue undefined (no channel label)
   }
 
-  const channelTopic = isNewSession && isDiscord ? safeTrim(ctx.ChannelTopic) : undefined;
-
   const payload = {
     schema: "openclaw.inbound_meta.v1",
     chat_id: safeTrim(ctx.OriginatingTo),
     channel: channelValue,
-    channel_topic: channelTopic,
-    provider,
-    surface,
+    provider: safeTrim(ctx.Provider),
+    surface: safeTrim(ctx.Surface),
     chat_type: chatType ?? (isDirect ? "direct" : undefined),
     flags: {
       is_group_chat: !isDirect ? true : undefined,
@@ -84,12 +75,18 @@ export function buildInboundUserContextPrefix(ctx: TemplateContext): string {
   const messageId = safeTrim(ctx.MessageSid);
   const messageIdFull = safeTrim(ctx.MessageSidFull);
   const conversationInfo = {
-    message_id: messageId,
-    message_id_full: messageIdFull && messageIdFull !== messageId ? messageIdFull : undefined,
-    reply_to_id: safeTrim(ctx.ReplyToId),
-    sender_id: safeTrim(ctx.SenderId),
+    message_id: isDirect ? undefined : messageId,
+    message_id_full: isDirect
+      ? undefined
+      : messageIdFull && messageIdFull !== messageId
+        ? messageIdFull
+        : undefined,
+    reply_to_id: isDirect ? undefined : safeTrim(ctx.ReplyToId),
+    sender_id: isDirect ? undefined : safeTrim(ctx.SenderId),
     conversation_label: isDirect ? undefined : safeTrim(ctx.ConversationLabel),
-    sender: safeTrim(ctx.SenderE164) ?? safeTrim(ctx.SenderId) ?? safeTrim(ctx.SenderUsername),
+    sender: isDirect
+      ? undefined
+      : (safeTrim(ctx.SenderE164) ?? safeTrim(ctx.SenderId) ?? safeTrim(ctx.SenderUsername)),
     group_subject: safeTrim(ctx.GroupSubject),
     group_channel: safeTrim(ctx.GroupChannel),
     group_space: safeTrim(ctx.GroupSpace),

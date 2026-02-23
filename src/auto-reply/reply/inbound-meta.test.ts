@@ -71,36 +71,6 @@ describe("buildInboundMetaSystemPrompt", () => {
     const payload = parseInboundMetaPayload(prompt);
     expect(payload["sender_id"]).toBeUndefined();
   });
-
-  it("includes discord channel topics only for new sessions", () => {
-    const prompt = buildInboundMetaSystemPrompt({
-      OriginatingTo: "discord:channel:123",
-      OriginatingChannel: "discord",
-      Provider: "discord",
-      Surface: "discord",
-      ChatType: "group",
-      ChannelTopic: "  Shipping updates  ",
-      IsNewSession: "true",
-    } as TemplateContext);
-
-    const payload = parseInboundMetaPayload(prompt);
-    expect(payload["channel_topic"]).toBe("Shipping updates");
-  });
-
-  it("omits discord channel topics for existing sessions", () => {
-    const prompt = buildInboundMetaSystemPrompt({
-      OriginatingTo: "discord:channel:123",
-      OriginatingChannel: "discord",
-      Provider: "discord",
-      Surface: "discord",
-      ChatType: "group",
-      ChannelTopic: "Shipping updates",
-      IsNewSession: "false",
-    } as TemplateContext);
-
-    const payload = parseInboundMetaPayload(prompt);
-    expect(payload["channel_topic"]).toBeUndefined();
-  });
 });
 
 describe("buildInboundUserContextPrefix", () => {
@@ -111,6 +81,30 @@ describe("buildInboundUserContextPrefix", () => {
     } as TemplateContext);
 
     expect(text).toBe("");
+  });
+
+  it("hides message identifiers for direct chats", () => {
+    const text = buildInboundUserContextPrefix({
+      ChatType: "direct",
+      MessageSid: "short-id",
+      MessageSidFull: "provider-full-id",
+    } as TemplateContext);
+
+    expect(text).toBe("");
+  });
+
+  it("does not treat group chats as direct based on sender id", () => {
+    const text = buildInboundUserContextPrefix({
+      ChatType: "group",
+      SenderId: "openclaw-control-ui",
+      MessageSid: "123",
+      ConversationLabel: "some-label",
+    } as TemplateContext);
+
+    const conversationInfo = parseConversationInfoPayload(text);
+    expect(conversationInfo["message_id"]).toBe("123");
+    expect(conversationInfo["sender_id"]).toBe("openclaw-control-ui");
+    expect(conversationInfo["conversation_label"]).toBe("some-label");
   });
 
   it("keeps conversation label for group chats", () => {
@@ -125,7 +119,7 @@ describe("buildInboundUserContextPrefix", () => {
 
   it("includes sender identifier in conversation info", () => {
     const text = buildInboundUserContextPrefix({
-      ChatType: "direct",
+      ChatType: "group",
       SenderE164: " +15551234567 ",
     } as TemplateContext);
 
@@ -135,7 +129,7 @@ describe("buildInboundUserContextPrefix", () => {
 
   it("includes message_id in conversation info", () => {
     const text = buildInboundUserContextPrefix({
-      ChatType: "direct",
+      ChatType: "group",
       MessageSid: "  msg-123  ",
     } as TemplateContext);
 
@@ -157,7 +151,7 @@ describe("buildInboundUserContextPrefix", () => {
 
   it("omits message_id_full when it matches message_id", () => {
     const text = buildInboundUserContextPrefix({
-      ChatType: "direct",
+      ChatType: "group",
       MessageSid: "same-id",
       MessageSidFull: "same-id",
     } as TemplateContext);
@@ -169,7 +163,7 @@ describe("buildInboundUserContextPrefix", () => {
 
   it("includes reply_to_id in conversation info", () => {
     const text = buildInboundUserContextPrefix({
-      ChatType: "direct",
+      ChatType: "group",
       MessageSid: "msg-200",
       ReplyToId: "msg-199",
     } as TemplateContext);
@@ -191,7 +185,7 @@ describe("buildInboundUserContextPrefix", () => {
 
   it("trims sender_id in conversation info", () => {
     const text = buildInboundUserContextPrefix({
-      ChatType: "direct",
+      ChatType: "group",
       MessageSid: "msg-457",
       SenderId: "  289522496  ",
     } as TemplateContext);
@@ -202,7 +196,7 @@ describe("buildInboundUserContextPrefix", () => {
 
   it("falls back to SenderId when sender phone is missing", () => {
     const text = buildInboundUserContextPrefix({
-      ChatType: "direct",
+      ChatType: "group",
       SenderId: " user@example.com ",
     } as TemplateContext);
 
